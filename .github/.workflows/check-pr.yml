@@ -1,0 +1,57 @@
+name: 'Check PR - .NET Core'
+on:
+  pull_request:
+    branches:
+      - 'main'
+
+jobs:
+  check-pr:
+    name: Build + DB migration + Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15.7
+        env:
+          POSTGRES_DB: dbname           # Your custom database name
+          POSTGRES_USER: dbuser          # Your custom database user
+          POSTGRES_PASSWORD: dbpassword  # Your custom database password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # Step 1: Checkout the code from the pull request branch
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history to check commit diffs
+
+      # Step 2: Set up .NET Core SDK
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.x' # Adjust for your project version
+
+      # Step 3: Install dependencies (restore NuGet packages)
+      - name: Restore dependencies
+        run: dotnet restore
+
+      # Step 4: Build the project
+      - name: Build project
+        run: dotnet build --configuration Release --no-restore
+
+      # Step 5: Set up environment for EF Core
+      - name: Set up environment variables
+        run: |
+          echo "ConnectionStrings__DefaultConnection=Host=127.0.0.1;Port=5432;Database=dbname;Username=dbuser;Password=dbpassword" >> $GITHUB_ENV
+
+      # Step 6: Apply database migrations (EF Core)
+      - name: Apply EF Core Migrations
+        run: dotnet ef database update
+
+
